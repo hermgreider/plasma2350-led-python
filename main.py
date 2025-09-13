@@ -34,10 +34,12 @@ def get_distance():
 # CONFIG
 # THIS IS THE MOST RECENT ONE
 # ----------------------------
-NUM_LEDS = 144
+NUM_LEDS = 120
+SPARKLE_PROBABILITY = .005
 FADE_UP_SPEED = 4
 FADE_DOWN_SPEED = 4
 brightness = .5  # 0.0 to 1.0
+brightness_array = [uniform(.25, 1) for _ in range(NUM_LEDS)]
 noise_speed = 0.05  # lower = slower animation
 NOISE_Y_OFFSET = 0.3
 
@@ -138,18 +140,26 @@ def noise2(x, y):
 
     return (a * (1 - ux) + b * ux) * (1 - uy) + (c * (1 - ux) + d * ux) * uy
 
-def color_from_palette(t):
+def color_from_palette(t, led_brightness):
+    #led_brightness = led_brightness * uniform(0, 1)
     """t: 0.0–1.0 → returns RGB from PALETTE with blending"""
     t = max(0.0, min(0.9999, t)) * (len(PALETTE) - 1)
     i = int(t)
     frac = t - i
     r1, g1, b1 = PALETTE[i]
     r2, g2, b2 = PALETTE[(i + 1) % len(PALETTE)]
+    #if SPARKLE_PROBABILITY < uniform(0, 1):
     return (
-        int((r1 + (r2 - r1) * frac) * brightness),
-        int((g1 + (g2 - g1) * frac) * brightness),
-        int((b1 + (b2 - b1) * frac) * brightness)
+        int((r1 + (r2 - r1) * frac) * led_brightness),
+        int((g1 + (g2 - g1) * frac) * led_brightness),
+        int((b1 + (b2 - b1) * frac) * led_brightness)
     )
+    #else:
+    #    return (
+    #        int(25),
+    #        int(25),
+    #        int(25)
+    #    )
 
 
 def lerp(a, b, t):
@@ -175,21 +185,22 @@ def move_to_target():
             elif current_leds[i][c] > target_leds[i][c]:
                 current_leds[i][c] = max(current_leds[i][c] - FADE_DOWN_SPEED, target_leds[i][c])
 
-def set_values_by_distance(distance, t):
-            # clamp distance to [20,200]
-        if distance < MINCM:
-            distance = MINCM
-        elif distance > MAXCM:
-            distance = MAXCM
-        
-        # normalize distance to a t between 0–1
-        t = (distance - MINCM) / (MAXCM - MINCM)
+def set_values_by_distance(distance):
+    global brightness, noise_speed, spacing
+    
+    # clamp distance to [20,200]
+    if distance < MINCM:
+        distance = MINCM
+    elif distance > MAXCM:
+        distance = MAXCM
+    
+    # normalize distance to a t between 0–1
+    t = (distance - MINCM) / (MAXCM - MINCM)
 
-        brightness = lerp(1, .3, t)
-        sample_points = int(lerp(25, 5, t))
-        noise_speed = lerp(0.1, 0.02, t)
-
-        spacing = (NUM_LEDS-1) / (sample_points-1)
+    brightness = lerp(1, .5, t)
+    sample_points = int(lerp(25, 5, t))
+    noise_speed = lerp(0.1, 0.02, t)
+    spacing = (NUM_LEDS-1) / (sample_points-1)
 
 # ----------------------------
 # LED HANDLING
@@ -230,7 +241,8 @@ while True:
     for s in range(sample_points):
         px, py = points[int(s * spacing)]
         n = noise2(px + t, py + t * NOISE_Y_OFFSET)
-        samples.append(color_from_palette(n))
+        # TODO: APPLY FLICKER BRIGHTNESS OF INDIVIDUAL LED
+        samples.append(color_from_palette(n, brightness))
 
     # interpolate for all NUM_LEDS
     for i in range(NUM_LEDS):
@@ -241,7 +253,16 @@ while True:
             target_leds[i] = samples[-1]
         else:
             target_leds[i] = lerp_color(samples[idx], samples[idx+1], frac)
-
+        
+        # Scale each RGB component by a random factor
+        if .05 > uniform(0, 1):
+            r, g, b = target_leds[i]
+            target_leds[i] = (
+                int(200), 
+                int(200), 
+                int(200)
+            )
+    
     move_to_target()
     display_current()
     frame += 1
@@ -255,8 +276,12 @@ while True:
         print("Delta FPS:", 1000/delta)
 
     if frame % 10 == 0:
-        distance = get_distance()
+        # distance = get_distance()
+        distance = 20 + (100-20) * (math.sin(2*math.pi*frame/1000) + 1) / 2
+       # def sin_wave(frame): return 20 + (100-20) * (math.sin(2*math.pi*frame/200) + 1) / 2
         print(distance, "cm")
+        set_values_by_distance(distance)
         
-        
+    # if frame % 100: 
+    #     brightness_array = [uniform(.25, 1) for _ in range(NUM_LEDS)]
 

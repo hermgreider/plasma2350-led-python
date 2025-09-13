@@ -161,6 +161,14 @@ def lerp_color(c1, c2, t):
         int(lerp(c1[1], c2[1], t)),
         int(lerp(c1[2], c2[2], t)),
     )
+# ----------------------------
+# LED HANDLING
+# ----------------------------
+current_leds = [[0] * 3 for _ in range(NUM_LEDS)]
+target_leds = [[0] * 3 for _ in range(NUM_LEDS)]
+
+led_strip = plasma.WS2812(NUM_LEDS, color_order=plasma.COLOR_ORDER_RGB)
+led_strip.start()
 
 def display_current():
     for i in range(NUM_LEDS):
@@ -175,35 +183,9 @@ def move_to_target():
             elif current_leds[i][c] > target_leds[i][c]:
                 current_leds[i][c] = max(current_leds[i][c] - FADE_DOWN_SPEED, target_leds[i][c])
 
-def set_values_by_distance(distance, t):
-            # clamp distance to [20,200]
-        if distance < MINCM:
-            distance = MINCM
-        elif distance > MAXCM:
-            distance = MAXCM
-        
-        # normalize distance to a t between 0–1
-        t = (distance - MINCM) / (MAXCM - MINCM)
-
-        brightness = lerp(1, .3, t)
-        sample_points = int(lerp(25, 5, t))
-        noise_speed = lerp(0.1, 0.02, t)
-
-        spacing = (NUM_LEDS-1) / (sample_points-1)
-
-# ----------------------------
-# LED HANDLING
-# ----------------------------
-current_leds = [[0] * 3 for _ in range(NUM_LEDS)]
-target_leds = [[0] * 3 for _ in range(NUM_LEDS)]
-
-led_strip = plasma.WS2812(NUM_LEDS, color_order=plasma.COLOR_ORDER_RGB)
-led_strip.start()
-
 # ----------------------------
 # MAIN
 # ----------------------------
-
 curves = [
     ((0, 0), (10, 0), (10, 10)),
     ((10, 10), (6, 14), (2, 10)),
@@ -222,10 +204,9 @@ MAXCM = 100
 MINCM = 20
 
 while True:
-    # t is the offset for the noise
     t = frame * noise_speed
 
-    # compute noise just for in SAMPLE_POINTS
+    # compute noise just for SAMPLE_POINTS
     samples = []
     for s in range(sample_points):
         px, py = points[int(s * spacing)]
@@ -245,18 +226,37 @@ while True:
     move_to_target()
     display_current()
     frame += 1
+    #sample_points = frame
+
+    
+
 
     # DELTA
     now = time.ticks_ms()
     delta = time.ticks_diff(now, last_time)
     last_time = now
 
+    move_to_target()
+    display_current()
     if frame % 5 == 0:
         print("Delta FPS:", 1000/delta)
 
-    if frame % 10 == 0:
+    if frame % 50 == 0:
         distance = get_distance()
         print(distance, "cm")
-        
-        
 
+
+        # clamp distance to [20,200]
+        if distance < MINCM:
+            distance = MINCM
+        elif distance > MAXCM:
+            distance = MAXCM
+        
+        # normalize distance to a t between 0–1
+        t = (distance - MINCM) / (MAXCM - MINCM)
+
+        brightness = lerp(1, .3, t)
+        sample_points = int(lerp(25, 5, t))
+        noise_speed = lerp(0.1, 0.02, t)
+
+        spacing = (NUM_LEDS-1) / (sample_points-1)

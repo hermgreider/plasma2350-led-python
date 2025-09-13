@@ -5,7 +5,7 @@ import plasma
 """
 A festive sparkly effect. Play around with BACKGROUND_COLOUR and SPARKLE_COLOUR for different effects!
 """
-
+frame = 0
 # Set how many LEDs you have
 NUM_LEDS = 144
 
@@ -50,6 +50,7 @@ led_strip = plasma.WS2812(NUM_LEDS, color_order=plasma.COLOR_ORDER_RGB)
 led_strip.start()
 
 while True:
+    print(frame)
     for i in range(NUM_LEDS):
         # randomly add sparkles
         if SPARKLE_INTENSITY > uniform(0, 1):
@@ -60,3 +61,4 @@ while True:
             target_leds[i] = BACKGROUND_COLOUR
     move_to_target()   # nudge our current colours closer to the target colours
     display_current()  # display current colours to strip
+    frame+=1

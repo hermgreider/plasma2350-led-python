@@ -276,7 +276,8 @@ while True:
         print("Delta FPS:", 1000/delta)
 
     if frame % 10 == 0:
-        # distance = get_distance()
+        distance = get_distance()
+        # if no sensor use the sin function below
         distance = 20 + (100-20) * (math.sin(2*math.pi*frame/1000) + 1) / 2
        # def sin_wave(frame): return 20 + (100-20) * (math.sin(2*math.pi*frame/200) + 1) / 2
         print(distance, "cm")

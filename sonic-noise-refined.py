@@ -1,4 +1,4 @@
-from random import uniform
+import random
 import math
 import plasma
 import time
@@ -69,32 +69,34 @@ def height_to_hue(height, hues):
     return lerp(hues[i],  hues[j], t)
 
 
-def get_random_value(ix, iy):
-    """ deterministic random function, accounts for position of value """
-    val = math.sin(ix * 12.9898 + iy * 78.233) * 43758.5453
-    val = val - math.floor(val)
-    return val
-
-
 def get_height(x, y, scale):
     """ Gets the intensity of the noise function based on position x, y, and scale """
+    """
+    x, y: floats, scaled position
+    Returns: interpolated noise value 0-1
+    """
     x = x * scale
     y = y * scale
-    # Bilinear Interpolation function
-    cell_x = math.floor(x)   # -> X coordinate (lower-left corner)
-    cell_y = math.floor(y)   # -> Y coordinate (lower-left corner)
-    offset_x = x - cell_x    # -> fractional offset inside the cell along X
-    offset_y = y - cell_y    # -> fractional offset inside the cell along Y
-    # pass in the boundaries
-    a = get_random_value(cell_x, cell_y)
-    b = get_random_value(cell_x + 1.0, cell_y)
-    c = get_random_value(cell_x, cell_y + 1.0)
-    d = get_random_value(cell_x + 1.0, cell_y + 1.0)
-    u = offset_x * offset_x * (3.0 - 2.0 * offset_x)  # smoothstep function
-    v = offset_y * offset_y * (3.0 - 2.0 * offset_y)  # smoothstep function
+    # Wrap around the grid
+    gx = int(x) % GRID_SIZE
+    gy = int(y) % GRID_SIZE
+    gx1 = (gx + 1) % GRID_SIZE
+    gy1 = (gy + 1) % GRID_SIZE
 
-    instensity = (a * (1 - u) + b * u) * (1 - v) + (c * (1 - u) + d * u) * v
-    return instensity
+    fx = x - int(x)  # fractional part
+    fy = y - int(y)
+
+    # Four corners
+    a = noise_grid[gy][gx]
+    b = noise_grid[gy][gx1]
+    c = noise_grid[gy1][gx]
+    d = noise_grid[gy1][gx1]
+
+    # Linear interpolation
+    top = a + (b - a) * fx
+    bottom = c + (d - c) * fx
+    return top + (bottom - top) * fy
+
 
 
 def get_distance():
@@ -135,7 +137,7 @@ def set_hsv(frame):
     flutter_speed_up = lerp(.15, .1, scale)
     flutter_speed_down = lerp(.09, .02, scale)
     #min_v = lerp(.25, .25, scale)
-   #  print("flutter:", flutter_probability, flutter_speed_up, flutter_speed_down)
+    # print("flutter:", flutter_probability, flutter_speed_up, flutter_speed_down)
 
     refresh_values()
 
@@ -181,6 +183,10 @@ target_values = [min_v] * NUM_LEDS # the target to lerp towards
 frame = 0
 offset = 0
 points = get_points_on_circle((0, 0), 10, NUM_LEDS) # Get evenly spaced points along all curves
+GRID_SIZE = 16
+noise_grid = [[random.random() for _ in range(GRID_SIZE)] for _ in range(GRID_SIZE)]
+
+
 #endregion
 
 

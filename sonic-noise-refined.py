@@ -101,7 +101,39 @@ def get_height(x, y, scale):
 
 def get_distance():
     """ generates a sin betwixt 0 and 10 if distance, the unit is meters """
-    return (math.sin(frame/2) + 1) * 5
+    # return (math.sin(frame/2) + 1) * 5
+    global last_presence, last_distance_cm, distance_cm, presence
+
+    if uart.any():
+        line = uart.readline()
+        if not line:
+            return last_distance_cm
+        # print("line is: ", line)
+
+        try:
+            text = line.decode('utf-8').strip()
+        except UnicodeError:
+            return distance_cm
+
+        if text.startswith("ON"):
+            presence = True
+        elif text.startswith("OFF"):
+            presence = False
+        elif text.startswith("Range"):
+            parts = text.split()
+            if len(parts) >= 2 and parts[1].isdigit():
+                distance_cm = int(parts[1])
+                # print("Range: {} cm ({:.2f} m)".format(distance_cm, distance_cm / 100.0))
+
+    if last_presence != presence:
+        print("Presence: ", presence)
+        last_presence = presence
+
+    if last_distance_cm != distance_cm:
+        print("Range: {} cm ({:.2f} m)".format(distance_cm, distance_cm / 100.0))
+        last_distance_cm = distance_cm
+    
+    return distance_cm
     #return mouse_x
 
 
@@ -110,7 +142,7 @@ def refresh_values():
     # set new targets
     for i, value in enumerate(values):
         values[i] = nudge(value, target_values[i], flutter_speed_up, flutter_speed_down)
-        if uniform(0, 1) < flutter_probability: # add random flutters
+        if random.uniform(0, 1) < flutter_probability: # add random flutters
             target_values[i] = max_v
         if value == target_values[i]:
             target_values[i] = min_v
@@ -120,9 +152,11 @@ def set_hsv(frame):
     """ Set the LEDS """
     global flutter_probability, flutter_speed_up, flutter_speed_down, min_v
     global offset
+    global hue_palette
 
     
-    scale = clamp(inverse_lerp(-11, 11, get_distance()), 0, 1) # normalized distance
+    scale = clamp(inverse_lerp(10, 120, get_distance()), 0, 1) # normalized distance
+    print("scale: ", scale)
     offset = frame * .05
     """ # smaller scale → faster x, y offset
     min_speed = 0.002
@@ -138,8 +172,11 @@ def set_hsv(frame):
     flutter_speed_down = lerp(.09, .02, scale)
     #min_v = lerp(.25, .25, scale)
     # print("flutter:", flutter_probability, flutter_speed_up, flutter_speed_down)
-
+    
+    color_scale = lerp(.01, .1, scale)
     refresh_values()
+    #hue_palette = [color - color_scale for color in hue_palette]
+    print(hue_palette)
 
     for (x, y), i in points:
         # Add time offset for flowing noise3
@@ -162,7 +199,7 @@ def set_hsv(frame):
 # region boilerplate
 
 # region LED HANDLING
-NUM_LEDS = 144
+NUM_LEDS = 120
 led_strip = plasma.WS2812(NUM_LEDS, color_order=plasma.COLOR_ORDER_RGB)
 led_strip.start()
 
@@ -173,7 +210,7 @@ LEDS = [(0, 0, 0)] * NUM_LEDS  # preallocate memory
 flutter_probability = .02
 flutter_speed_up = .05
 flutter_speed_down = .2
-min_v = .2
+min_v = .25
 max_v = .75
 values = [min_v] * NUM_LEDS
 target_values = [min_v] * NUM_LEDS # the target to lerp towards
@@ -189,9 +226,22 @@ noise_grid = [[random.random() for _ in range(GRID_SIZE)] for _ in range(GRID_SI
 
 #endregion
 
+#region SENSOR
+# UART0 on Pimoroni Plasma 2350
+uart = machine.UART(0, baudrate=115200, tx=machine.Pin(0), rx=machine.Pin(1), bits=8, parity=None, stop=1)
 
-hue_palette = [0, .05, .1, .2, .3]
-# hue_palette = [.3, .38, .4, .58, .62]
+print("HMMD mmWave Sensor (text mode) reader started...")
+
+presence = None
+distance_cm = 0.0
+last_presence = False
+last_distance_cm = 1000.0
+
+#endregion
+#hue_palette = [0, .05, .1, .2, .3]
+#hue_palette = [.3, .38, .4, .58, .62]
+initial_hue_palette = [.36, .37, .38, .4, .6]
+hue_palette = [.36, .37, .38, .4, .6]
 
 #endregion
 
@@ -208,7 +258,7 @@ while True:
 
     frame += 1
 
-    if frame % 10 == 0:
-        print("Delta FPS:", 1000/delta)
+    """ if frame % 10 == 0:
+        print("Delta FPS:", 1000/delta) """
 
 # endregion

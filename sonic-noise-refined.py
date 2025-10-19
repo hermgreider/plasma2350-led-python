@@ -101,10 +101,12 @@ def get_height(x, y, scale):
 
 def get_distance():
     """ generates a sin betwixt 0 and 10 if distance, the unit is meters """
-    # return (math.sin(frame/2) + 1) * 5
-    global last_presence, last_distance_cm, distance_cm, presence
 
-    if uart.any():
+    return (math.sin(frame/75) + 1) * 5
+
+    """global last_presence, last_distance_cm, distance_cm, presence
+
+     if uart.any():
         line = uart.readline()
         if not line:
             return last_distance_cm
@@ -133,7 +135,7 @@ def get_distance():
         print("Range: {} cm ({:.2f} m)".format(distance_cm, distance_cm / 100.0))
         last_distance_cm = distance_cm
     
-    return distance_cm
+    return distance_cm """
     #return mouse_x
 
 
@@ -155,8 +157,8 @@ def set_hsv(frame):
     global hue_palette
 
     
-    scale = clamp(inverse_lerp(10, 120, get_distance()), 0, 1) # normalized distance
-    print("scale: ", scale)
+    scale = clamp(inverse_lerp(0, 10, get_distance()), 0, 1) # normalized distance
+    #print("scale: ", scale)
     offset = frame * .05
     """ # smaller scale → faster x, y offset
     min_speed = 0.002
@@ -173,10 +175,10 @@ def set_hsv(frame):
     #min_v = lerp(.25, .25, scale)
     # print("flutter:", flutter_probability, flutter_speed_up, flutter_speed_down)
     
-    color_scale = lerp(.01, .1, scale)
+    color_scale = lerp(.01, .3, scale)
     refresh_values()
-    #hue_palette = [color - color_scale for color in hue_palette]
-    print(hue_palette)
+    hue_palette = [color - color_scale for color in initial_hue_palette]
+    print(scale, hue_palette)
 
     for (x, y), i in points:
         # Add time offset for flowing noise3
@@ -210,8 +212,8 @@ LEDS = [(0, 0, 0)] * NUM_LEDS  # preallocate memory
 flutter_probability = .02
 flutter_speed_up = .05
 flutter_speed_down = .2
-min_v = .25
-max_v = .75
+min_v = .15
+max_v = .55
 values = [min_v] * NUM_LEDS
 target_values = [min_v] * NUM_LEDS # the target to lerp towards
 #endregion
@@ -241,7 +243,8 @@ last_distance_cm = 1000.0
 #hue_palette = [0, .05, .1, .2, .3]
 #hue_palette = [.3, .38, .4, .58, .62]
 initial_hue_palette = [.36, .37, .38, .4, .6]
-hue_palette = [.36, .37, .38, .4, .6]
+#initial_hue_palette = [.36, .14, .6, .4, .75]
+hue_palette = initial_hue_palette
 
 #endregion
 

@@ -102,11 +102,11 @@ def get_height(x, y, scale):
 def get_distance():
     """ generates a sin betwixt 0 and 10 if distance, the unit is meters """
 
-    return (math.sin(frame/75) + 1) * 5
+    # return (math.sin(frame/75) + 1) * 5
 
-    """global last_presence, last_distance_cm, distance_cm, presence
+    global last_presence, last_distance_cm, distance_cm, presence
 
-     if uart.any():
+    if uart.any():
         line = uart.readline()
         if not line:
             return last_distance_cm
@@ -135,7 +135,7 @@ def get_distance():
         print("Range: {} cm ({:.2f} m)".format(distance_cm, distance_cm / 100.0))
         last_distance_cm = distance_cm
     
-    return distance_cm """
+    return distance_cm
     #return mouse_x
 
 
@@ -154,10 +154,11 @@ def set_hsv(frame):
     """ Set the LEDS """
     global flutter_probability, flutter_speed_up, flutter_speed_down, min_v
     global offset
-    global hue_palette
+    global hue_palette, smooth_scale
 
     
-    scale = clamp(inverse_lerp(0, 10, get_distance()), 0, 1) # normalized distance
+    scale = clamp(inverse_lerp(10, 60, get_distance()), 0, 1) # normalized distance
+    smooth_scale = smooth_scale + alpha * (scale - smooth_scale)
     #print("scale: ", scale)
     offset = frame * .05
     """ # smaller scale → faster x, y offset
@@ -175,10 +176,10 @@ def set_hsv(frame):
     #min_v = lerp(.25, .25, scale)
     # print("flutter:", flutter_probability, flutter_speed_up, flutter_speed_down)
     
-    color_scale = lerp(.01, .3, scale)
+    color_scale = lerp(.01, .3, smooth_scale)
     refresh_values()
     hue_palette = [color - color_scale for color in initial_hue_palette]
-    print(scale, hue_palette)
+    # print(scale, hue_palette)
 
     for (x, y), i in points:
         # Add time offset for flowing noise3
@@ -224,6 +225,9 @@ offset = 0
 points = get_points_on_circle((0, 0), 10, NUM_LEDS) # Get evenly spaced points along all curves
 GRID_SIZE = 16
 noise_grid = [[random.random() for _ in range(GRID_SIZE)] for _ in range(GRID_SIZE)]
+
+alpha = 0.1  # smaller = smoother, slower response
+smooth_scale = 0  # initialize once at start
 
 
 #endregion

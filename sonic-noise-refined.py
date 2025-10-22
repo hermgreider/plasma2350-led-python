@@ -157,7 +157,7 @@ def set_hsv(frame):
     global hue_palette, smooth_scale
 
     
-    scale = clamp(inverse_lerp(10, 60, get_distance()), 0, 1) # normalized distance
+    scale = clamp(inverse_lerp(5, 60, get_distance()), 0, 1) # normalized distance
     smooth_scale = smooth_scale + alpha * (scale - smooth_scale)
     #print("scale: ", scale)
     offset = frame * .05
@@ -170,9 +170,9 @@ def set_hsv(frame):
     offset += speed
     #print('%.3f'%speed, '%.3f'%offset) """
 
-    flutter_probability = lerp(.2, .02, scale)
-    flutter_speed_up = lerp(.15, .1, scale)
-    flutter_speed_down = lerp(.09, .02, scale)
+    flutter_probability = lerp(.1, .01, smooth_scale)
+    flutter_speed_up = lerp(.15, .1, smooth_scale)
+    flutter_speed_down = lerp(.09, .02, smooth_scale)
     #min_v = lerp(.25, .25, scale)
     # print("flutter:", flutter_probability, flutter_speed_up, flutter_speed_down)
     
@@ -226,7 +226,7 @@ points = get_points_on_circle((0, 0), 10, NUM_LEDS) # Get evenly spaced points a
 GRID_SIZE = 16
 noise_grid = [[random.random() for _ in range(GRID_SIZE)] for _ in range(GRID_SIZE)]
 
-alpha = 0.1  # smaller = smoother, slower response
+alpha = 0.05  # smaller = smoother, slower response
 smooth_scale = 0  # initialize once at start
 
 
@@ -246,7 +246,8 @@ last_distance_cm = 1000.0
 #endregion
 #hue_palette = [0, .05, .1, .2, .3]
 #hue_palette = [.3, .38, .4, .58, .62]
-initial_hue_palette = [.36, .37, .38, .4, .6]
+#initial_hue_palette = [.36, .37, .38, .4, .6]
+initial_hue_palette = [.4, .5, .55, .6, .65]
 #initial_hue_palette = [.36, .14, .6, .4, .75]
 hue_palette = initial_hue_palette
 

@@ -6,6 +6,32 @@ import machine
 
 # SONIC-NOISE-REFINED.PY
 
+class Flutter:
+    def __init__(self, current, min, max):
+        self.current = current
+        self.min = min
+        self.max = max
+
+class Daisy:
+    def __init__(self, envelope, patch):
+        self.envelope = envelope
+        self.patch = patch
+
+class Config:
+    def __init__(self, hue_palette, scale_multiplier, smooth_factor, flutter_probability: Flutter, flutter_speed_up: Flutter, flutter_speed_down: Flutter, min_value, max_value):
+        self.hue_palette = hue_palette
+        self.scale_multiplier = scale_multiplier
+        self.smooth_factor = smooth_factor
+
+        self.flutter_probability = flutter_probability
+        self.flutter_speed_up = flutter_speed_up
+        self.flutter_speed_down = flutter_speed_down
+
+        self.min_value = min_value
+        self.max_value = max_value
+
+
+    
 TRIG = machine.Pin(28, machine.Pin.OUT)   
 ECHO = machine.Pin(19, machine.Pin.IN)  # (with voltage divider)
 
@@ -143,24 +169,22 @@ def refresh_values():
     # nudge values toward target
     # set new targets
     for i, value in enumerate(values):
-        values[i] = nudge(value, target_values[i], flutter_speed_up, flutter_speed_down)
-        if random.uniform(0, 1) < flutter_probability: # add random flutters
-            target_values[i] = max_v
+        values[i] = nudge(value, target_values[i], SETTINGS.flutter_speed_up.current, SETTINGS.flutter_speed_down.current)
+        if random.uniform(0, 1) < SETTINGS.flutter_probability.current: # add random flutters
+            target_values[i] = SETTINGS.max_value
         if value == target_values[i]:
-            target_values[i] = min_v
+            target_values[i] = SETTINGS.min_value
 
 
-def set_hsv(frame):
+def set_hsv():
     """ Set the LEDS """
-    global flutter_probability, flutter_speed_up, flutter_speed_down, min_v
-    global offset
-    global hue_palette, smooth_scale
+    global SETTINGS, offset, hue_palette, smooth_scale
 
     
     scale = clamp(inverse_lerp(5, 60, get_distance()), 0, 1) # normalized distance
-    smooth_scale = smooth_scale + alpha * (scale - smooth_scale)
+    smooth_scale = smooth_scale + SETTINGS.smooth_factor * (scale - smooth_scale)
     #print("scale: ", scale)
-    offset = frame * .05
+    # offset = frame * .05
     """ # smaller scale → faster x, y offset
     min_speed = 0.002
     max_speed = .5
@@ -170,16 +194,14 @@ def set_hsv(frame):
     offset += speed
     #print('%.3f'%speed, '%.3f'%offset) """
 
-    flutter_probability = lerp(.1, .01, smooth_scale)
-    flutter_speed_up = lerp(.15, .1, smooth_scale)
-    flutter_speed_down = lerp(.09, .02, smooth_scale)
+    SETTINGS.flutter_probability.current = lerp(SETTINGS.flutter_probability.min, SETTINGS.flutter_probability.max, smooth_scale)
+    SETTINGS.flutter_speed_up.current = lerp(SETTINGS.flutter_speed_up.min, SETTINGS.flutter_speed_up.max, smooth_scale)
+    SETTINGS.flutter_speed_down.current = lerp(SETTINGS.flutter_speed_down.min, SETTINGS.flutter_speed_down.max, smooth_scale)
     #min_v = lerp(.25, .25, scale)
-    # print("flutter:", flutter_probability, flutter_speed_up, flutter_speed_down)
     
     color_scale = lerp(.01, .3, smooth_scale)
     refresh_values()
-    hue_palette = [color - color_scale for color in initial_hue_palette]
-    # print(scale, hue_palette)
+    hue_palette = [color - color_scale for color in SETTINGS.hue_palette]
 
     for (x, y), i in points:
         # Add time offset for flowing noise3
@@ -187,7 +209,6 @@ def set_hsv(frame):
         height = get_height(x + offset, y + offset * 0.3, scale)
         hue = height_to_hue(height, hue_palette) # Map noise to leds
         saturation = lerp(.75, 1, 1 - scale) # normalize and invert value for s
-        hsv = (hue, saturation, values[i])
         # LEDS[i] = (i,hsv)
         led_strip.set_hsv(i, hue, saturation, values[i])
         # set dots with converted hsv
@@ -200,6 +221,16 @@ def set_hsv(frame):
 
 
 # region boilerplate
+SETTINGS = Config(
+    [.4, .5, .55, .6, .65], 
+    0.05, 
+    0.1, # smaller = smoother, slower response
+    Flutter(.05, .1, .01),
+    Flutter(.05, .15, .1),
+    Flutter(.2, .09, .02),
+    .15, 
+    .55
+)
 
 # region LED HANDLING
 NUM_LEDS = 120
@@ -210,13 +241,8 @@ LEDS = [(0, 0, 0)] * NUM_LEDS  # preallocate memory
 #endregion
 
 # region FLUTTER
-flutter_probability = .02
-flutter_speed_up = .05
-flutter_speed_down = .2
-min_v = .15
-max_v = .55
-values = [min_v] * NUM_LEDS
-target_values = [min_v] * NUM_LEDS # the target to lerp towards
+values = [SETTINGS.min_value] * NUM_LEDS
+target_values = [SETTINGS.min_value] * NUM_LEDS # the target to lerp towards
 #endregion
 
 #region OTHER
@@ -226,7 +252,6 @@ points = get_points_on_circle((0, 0), 10, NUM_LEDS) # Get evenly spaced points a
 GRID_SIZE = 16
 noise_grid = [[random.random() for _ in range(GRID_SIZE)] for _ in range(GRID_SIZE)]
 
-alpha = 0.05  # smaller = smoother, slower response
 smooth_scale = 0  # initialize once at start
 
 
@@ -244,12 +269,13 @@ last_presence = False
 last_distance_cm = 1000.0
 
 #endregion
+
+
 #hue_palette = [0, .05, .1, .2, .3]
 #hue_palette = [.3, .38, .4, .58, .62]
 #initial_hue_palette = [.36, .37, .38, .4, .6]
-initial_hue_palette = [.4, .5, .55, .6, .65]
 #initial_hue_palette = [.36, .14, .6, .4, .75]
-hue_palette = initial_hue_palette
+hue_palette = SETTINGS.hue_palette
 
 #endregion
 
@@ -257,7 +283,7 @@ hue_palette = initial_hue_palette
 # region LED loop
 while True:
     last_time = time.ticks_ms()  # record the first timestamp
-    set_hsv(frame)
+    set_hsv()
     # frame boilerplate
     now = time.ticks_ms() 
     

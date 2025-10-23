@@ -6,7 +6,7 @@ import machine
 
 # SONIC-NOISE-REFINED.PY
 
-class Flutter:
+class CurrentMinMax:
     def __init__(self, current, min, max):
         self.current = current
         self.min = min
@@ -18,7 +18,7 @@ class Daisy:
         self.patch = patch
 
 class Config:
-    def __init__(self, hue_palette, scale_multiplier, smooth_factor, flutter_probability: Flutter, flutter_speed_up: Flutter, flutter_speed_down: Flutter, min_value, max_value):
+    def __init__(self, hue_palette, scale_multiplier, smooth_factor, flutter_probability: CurrentMinMax, flutter_speed_up: CurrentMinMax, flutter_speed_down: CurrentMinMax, value: CurrentMinMax, distance: CurrentMinMax):
         self.hue_palette = hue_palette
         self.scale_multiplier = scale_multiplier
         self.smooth_factor = smooth_factor
@@ -27,13 +27,13 @@ class Config:
         self.flutter_speed_up = flutter_speed_up
         self.flutter_speed_down = flutter_speed_down
 
-        self.min_value = min_value
-        self.max_value = max_value
+        self.value = value
+        self.distance = distance
 
 
     
 TRIG = machine.Pin(28, machine.Pin.OUT)   
-ECHO = machine.Pin(19, machine.Pin.IN)  # (with voltage divider)
+ECHO = machine.Pin(19, machine.Pin.IN)
 
 
 def get_points_on_circle(center, radius, num_points):
@@ -171,9 +171,9 @@ def refresh_values():
     for i, value in enumerate(values):
         values[i] = nudge(value, target_values[i], SETTINGS.flutter_speed_up.current, SETTINGS.flutter_speed_down.current)
         if random.uniform(0, 1) < SETTINGS.flutter_probability.current: # add random flutters
-            target_values[i] = SETTINGS.max_value
+            target_values[i] = SETTINGS.value.max
         if value == target_values[i]:
-            target_values[i] = SETTINGS.min_value
+            target_values[i] = SETTINGS.value.min
 
 
 def set_hsv():
@@ -222,14 +222,14 @@ def set_hsv():
 
 # region boilerplate
 SETTINGS = Config(
-    [.4, .5, .55, .6, .65], 
-    0.05, 
-    0.1, # smaller = smoother, slower response
-    Flutter(.05, .1, .01),
-    Flutter(.05, .15, .1),
-    Flutter(.2, .09, .02),
-    .15, 
-    .55
+    hue_palette = [.4, .5, .55, .6, .65], 
+    scale_multiplier = 0.05, 
+    smooth_factor = 0.1, # smaller = smoother, slower response
+    flutter_probability = CurrentMinMax(.05, .1, .01),
+    flutter_speed_up = CurrentMinMax(.05, .15, .1),
+    flutter_speed_down = CurrentMinMax(.2, .09, .02),
+    value = CurrentMinMax(-1, .15, .55),
+    distance = CurrentMinMax(-1, 5, 60)
 )
 
 # region LED HANDLING
@@ -241,8 +241,8 @@ LEDS = [(0, 0, 0)] * NUM_LEDS  # preallocate memory
 #endregion
 
 # region FLUTTER
-values = [SETTINGS.min_value] * NUM_LEDS
-target_values = [SETTINGS.min_value] * NUM_LEDS # the target to lerp towards
+values = [SETTINGS.value.min] * NUM_LEDS
+target_values = [SETTINGS.value.min] * NUM_LEDS # the target to lerp towards
 #endregion
 
 #region OTHER

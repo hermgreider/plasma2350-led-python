@@ -127,8 +127,8 @@ def get_height(x, y, scale):
 
 def get_distance():
     """ generates a sin betwixt 0 and 10 if distance, the unit is meters """
-
-    # return (math.sin(frame/75) + 1) * 5
+    # Dad this is the sin function for simulating the distance value
+    return (math.sin(frame/75) + 1) * 5
 
     global last_presence, last_distance_cm, distance_cm, presence
 

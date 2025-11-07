@@ -7,13 +7,17 @@ import time
 # Initialize UART 1 on pins GP20 (TX) and GP21 (RX).
 # The RP2040/RP2350 chip allows multiple pin mappings for each UART peripheral.
 # For UART1, one option is GP20 for TX and GP21 for RX.
-# uart = UART(1, baudrate=9600, tx=Pin(20), rx=Pin(21))
-uart = UART(0, baudrate=9600, tx=Pin(0), rx=Pin(1))
+uart = UART(1, baudrate=9600, tx=Pin(20), rx=Pin(21))
+# uart = UART(0, baudrate=9600, tx=Pin(0), rx=Pin(1))
 
 print("Listening for data from Daisy Seed...")
 
+# set up the Pico W's onboard LED
+pico_led = Pin('LED', Pin.OUT)
+
 while True:
     if uart.any(): # Check if any data is available to read
+        uart.write("A")
         data = uart.read()
         if data:
             try:
@@ -21,4 +25,13 @@ while True:
                 print(f"Received: {message}")
             except UnicodeError:
                 print("Received non-UTF-8 data.")
+
+            # flash the onboard LED after getting data
+            pico_led.value(True)
+            time.sleep(0.2)
+            pico_led.value(False)
+            time.sleep(0.2)
+            pico_led.value(True)
+            time.sleep(0.2)
+            pico_led.value(False)
 

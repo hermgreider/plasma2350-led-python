@@ -130,7 +130,7 @@ def get_distance():
 
     # return (math.sin(frame/75) + 1) * 5
 
-    global last_presence, last_distance_cm, distance_cm, presence
+    global last_presence, last_distance_cm, distance_cm, presence, last_distance_ms
 
     if uart.any():
         line = uart.readline()
@@ -156,12 +156,18 @@ def get_distance():
     if last_presence != presence:
         print("Presence: ", presence)
         last_presence = presence
-
     if last_distance_cm != distance_cm:
         print("Range: {} cm ({:.2f} m)".format(distance_cm, distance_cm / 100.0))
         last_distance_cm = distance_cm
-    
-    return distance_cm
+        last_distance_ms = time.time()
+       
+    elif last_distance_ms + 5 < time.time():
+        distance_cm = SETTINGS.distance.max
+        last_distance_ms = time.time()
+        last_distance_cm = distance_cm
+        print ("resetting to min", distance_cm)
+    #distance_cm = 200.0
+    return distance_cm 
     #return mouse_x
 
 
@@ -178,10 +184,9 @@ def refresh_values():
 
 def set_hsv():
     """ Set the LEDS """
-    global SETTINGS, offset, hue_palette, smooth_scale
-
-    
-    scale = clamp(inverse_lerp(5, 60, get_distance()), 0, 1) # normalized distance
+    global SETTINGS, offset, hue_palette, smooth_scale, last_distance_cm
+    SETTINGS.distance.current = get_distance()
+    scale = clamp(inverse_lerp(SETTINGS.distance.min, SETTINGS.distance.max, SETTINGS.distance.current), 0, 1) # normalized distance
     smooth_scale = smooth_scale + SETTINGS.smooth_factor * (scale - smooth_scale)
     #print("scale: ", scale)
     # offset = frame * .05
@@ -228,8 +233,8 @@ SETTINGS = Config(
     flutter_probability = CurrentMinMax(.05, .1, .01),
     flutter_speed_up = CurrentMinMax(.05, .15, .1),
     flutter_speed_down = CurrentMinMax(.2, .09, .02),
-    value = CurrentMinMax(-1, .15, .55),
-    distance = CurrentMinMax(-1, 5, 60)
+    value = CurrentMinMax(.55, .45, 1.0),
+    distance = CurrentMinMax(400, 300, 500)
 )
 
 # region LED HANDLING
@@ -267,6 +272,7 @@ presence = None
 distance_cm = 0.0
 last_presence = False
 last_distance_cm = 1000.0
+last_distance_ms = time.time()
 
 #endregion
 

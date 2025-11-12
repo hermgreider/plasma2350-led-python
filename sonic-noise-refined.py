@@ -128,7 +128,7 @@ def get_height(x, y, scale):
 def get_distance():
     """ generates a sin betwixt 0 and 10 if distance, the unit is meters """
     # Dad this is the sin function for simulating the distance value
-    return (math.sin(frame/75) + 1) * 5
+    # return (math.sin(frame/75) + 1) * 5
 
     global last_presence, last_distance_cm, distance_cm, presence, last_distance_ms
 
@@ -234,7 +234,8 @@ SETTINGS = Config(
     flutter_speed_up = CurrentMinMax(.05, .15, .1),
     flutter_speed_down = CurrentMinMax(.2, .09, .02),
     value = CurrentMinMax(.55, .45, 1.0),
-    distance = CurrentMinMax(400, 300, 500)
+    distance = CurrentMinMax(200, 75, 250)
+#    distance = CurrentMinMax(400, 300, 500)
 )
 
 # region LED HANDLING

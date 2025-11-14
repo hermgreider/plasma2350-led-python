@@ -223,14 +223,14 @@ def set_hsv():
 
 # region boilerplate
 SETTINGS = Config(
-    #hue_palette = [.1, .2, .3], # Bell 1 - 1 pane
+    #hue_palette = [.1, .2, .3, .4, .6, .65], # Bell 1 - 1 pane
     hue_palette =[.3, .38, .4, .58, .62],  # Bell 2 - 8 pane
     #hue_palette =[.6, .62, .65, .7, .8],  # Shaker 1 - 8 pane
     #hue_palette = [.4, .5, .55, .6, .65], # Shaker 2 - 4 pane
-    #hue_palette = [.2, .25, .45, .5, .55], # Moog Bass - 6 pane
+    # hue_palette = [.1, .15, .25, .52, .54, .95], # Moog Bass - 6 pane
     #hue_palette = [.6, .65, .78, .9], # Moogy Pad - 4 pane
-    #hue_palette = [.1, .3, .35, .4, .65, .7], # Moogy Pad - Horiz 4 pane
-    #hue_palette = [.7, .72, .78, .82, .89], # Moogy Pad - Tall 8 pane
+    #hue_palette = [.1, .3, .35, .4, .65, .9], # Moogy Pad - Horiz 4 pane
+    # hue_palette = [.7, .72, .78, .82, .89], # Moogy Pad - Tall 8 pane
     scale_multiplier = 0.05, 
     smooth_factor = 0.08, # smaller = smoother, slower response
     flutter_probability = CurrentMinMax(.05, .1, .01),

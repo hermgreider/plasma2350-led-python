@@ -128,8 +128,8 @@ def get_distance():
 
     global last_presence, last_distance_cm, distance_cm, presence, last_distance_ms
 
-    if uart.any():
-        line = uart.readline()
+    if uartSensor.any():
+        line = uartSensor.readline()
         if not line:
             return last_distance_cm
         # print("line is: ", line)
@@ -184,6 +184,7 @@ def set_hsv():
     SETTINGS.distance.current = get_distance()
     scale = clamp(inverse_lerp(SETTINGS.distance.min, SETTINGS.distance.max, SETTINGS.distance.current), 0, 1) # normalized distance
     smooth_scale = smooth_scale + SETTINGS.smooth_factor * (scale - smooth_scale)
+    uartDaisy.write(int(smooth_scale * 255).to_bytes(2, "little"))
     #print("scale: ", scale)
     # offset = frame * .05
     """ # smaller scale → faster x, y offset
@@ -268,7 +269,8 @@ smooth_scale = 0  # initialize once at start
 
 #region SENSOR
 # UART0 on Pimoroni Plasma 2350
-uart = machine.UART(0, baudrate=115200, tx=machine.Pin(0), rx=machine.Pin(1), bits=8, parity=None, stop=1)
+uartSensor = machine.UART(0, baudrate=115200, tx=machine.Pin(0), rx=machine.Pin(1), bits=8, parity=None, stop=1)
+uartDaisy = machine.UART(1, baudrate=9600, tx=machine.Pin(20), rx=machine.Pin(21))
 
 print("HMMD mmWave Sensor (text mode) reader started...")
 
@@ -280,11 +282,6 @@ last_distance_ms = time.time()
 
 #endregion
 
-
-#hue_palette = [0, .05, .1, .2, .3]
-#hue_palette = [.3, .38, .4, .58, .62]
-#initial_hue_palette = [.36, .37, .38, .4, .6]
-#initial_hue_palette = [.36, .14, .6, .4, .75]
 hue_palette = SETTINGS.hue_palette
 
 #endregion

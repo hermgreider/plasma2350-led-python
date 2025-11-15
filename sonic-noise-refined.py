@@ -185,7 +185,7 @@ def set_hsv():
     scale = clamp(inverse_lerp(SETTINGS.distance.min, SETTINGS.distance.max, SETTINGS.distance.current), 0, 1) # normalized distance
     smooth_scale = smooth_scale + SETTINGS.smooth_factor * (scale - smooth_scale)
     uartDaisy.write(int(smooth_scale * 255).to_bytes(2, "little"))
-    #print("scale: ", scale)
+    print("smooth_scale: ", smooth_scale, ", encoded: ", int(smooth_scale * 255).to_bytes(1, "little"))
     # offset = frame * .05
     """ # smaller scale → faster x, y offset
     min_speed = 0.002

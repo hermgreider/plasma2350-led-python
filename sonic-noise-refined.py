@@ -185,7 +185,7 @@ def set_hsv():
     scale = clamp(inverse_lerp(SETTINGS.distance.min, SETTINGS.distance.max, SETTINGS.distance.current), 0, 1) # normalized distance
     smooth_scale = smooth_scale + SETTINGS.smooth_factor * (scale - smooth_scale)
     uartDaisy.write(int(smooth_scale * 255).to_bytes(2, "little"))
-    print("smooth_scale: ", smooth_scale, ", encoded: ", int(smooth_scale * 255).to_bytes(1, "little"))
+    # print("smooth_scale: ", smooth_scale, ", encoded: ", int(smooth_scale * 255).to_bytes(1, "little"))
     # offset = frame * .05
     """ # smaller scale → faster x, y offset
     min_speed = 0.002
@@ -224,21 +224,21 @@ def set_hsv():
 
 # region boilerplate
 SETTINGS = Config(
-    #hue_palette = [.1, .2, .3, .4, .6, .65], # Bell 1 - 1 pane
-    hue_palette =[.3, .38, .4, .58, .62],  # Bell 2 - 8 pane
-    #hue_palette =[.6, .62, .65, .7, .8],  # Shaker 1 - 8 pane
-    #hue_palette = [.4, .5, .55, .6, .65], # Shaker 2 - 4 pane
-    # hue_palette = [.1, .15, .25, .52, .54, .95], # Moog Bass - 6 pane
-    #hue_palette = [.6, .65, .78, .9], # Moogy Pad - 4 pane
-    #hue_palette = [.1, .3, .35, .4, .65, .9], # Moogy Pad - Horiz 4 pane
-    # hue_palette = [.7, .72, .78, .82, .89], # Moogy Pad - Tall 8 pane
+    # hue_palette = [.1, .15, .175, .4, .85, .87], # Bell 1 - 1 pane
+    # hue_palette =[.3, .32, .34, .36, .38, .4, .58, .62],  # Bell 2 - 8 pane
+     # hue_palette =[.11, .12, .13, .257, .26, .261],  # Shaker 1 - 8 pane
+    # hue_palette = [.4, .45, .50, .57, .6, .65], # Shaker 2 - 4 pane
+     hue_palette = [.51, .52, .561, .562, .563, .95], # Moog Bass - 6 pane
+    # hue_palette = [.2, .23, .24, .26, .6, .65, .78, .9], # Moogy Pad - 4 pane
+    # hue_palette = [.1, .3, .35, .4, .65, .9], # Moogy Pad - Horiz 4 pane
+    # hue_palette = [.65, .66, .67, .7, .72, .78, .82, .89], # Moogy Pad - Tall 8 pane
     scale_multiplier = 0.05, 
     smooth_factor = 0.08, # smaller = smoother, slower response
     flutter_probability = CurrentMinMax(.05, .1, .01),
     flutter_speed_up = CurrentMinMax(.05, .15, .1),
     flutter_speed_down = CurrentMinMax(.2, .09, .02),
-    value = CurrentMinMax(.55, .45, 1.0),
-    distance = CurrentMinMax(200, 75, 250)
+    value = CurrentMinMax(.75, .78, 1.0),
+    distance = CurrentMinMax(90, 90, 450)
 #    distance = CurrentMinMax(400, 300, 500)
 )
 

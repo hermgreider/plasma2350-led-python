@@ -32,7 +32,7 @@ class Config:
 
 
 
-def get_points_on_circle(center, radius, num_points):
+""" def get_points_on_circle(center, radius, num_points):
     cx, cy = center
     return [
         ((
@@ -40,8 +40,17 @@ def get_points_on_circle(center, radius, num_points):
             cy + radius * math.sin(2 * math.pi * i / num_points)
         ), i)
         for i in range(num_points)
-    ]
+    ] """
 
+def get_points_on_line(start, end, num_points):
+    x1, y1 = start
+    x2, y2 = end
+
+    return [
+        ((x1 + (x2 - x1) * i / (num_points - 1),
+          y1 + (y2 - y1) * i / (num_points - 1)), i)
+        for i in range(num_points)
+    ]
 
 def clamp(value, min_val=0.0, max_val=1.0):
     """Clamp a number between min_val and max_val."""
@@ -170,8 +179,8 @@ def get_distance():
 def refresh_values():
     # nudge values toward target
     # set new targets
-    for i, value in enumerate(values):
-        values[i] = nudge(value, target_values[i], SETTINGS.flutter_speed_up.current, SETTINGS.flutter_speed_down.current)
+    for i, value in enumerate(current_values):
+        current_values[i] = nudge(value, target_values[i], SETTINGS.flutter_speed_up.current, SETTINGS.flutter_speed_down.current)
         if random.uniform(0, 1) < SETTINGS.flutter_probability.current: # add random flutters
             target_values[i] = SETTINGS.value.max
         if value == target_values[i]:
@@ -184,35 +193,37 @@ def set_hsv():
     SETTINGS.distance.current = get_distance()
     scale = clamp(inverse_lerp(SETTINGS.distance.min, SETTINGS.distance.max, SETTINGS.distance.current), 0, 1) # normalized distance
     smooth_scale = smooth_scale + SETTINGS.smooth_factor * (scale - smooth_scale)
-    uartDaisy.write(int(smooth_scale * 255).to_bytes(2, "little"))
+    uartDaisy.write(int(smooth_scale * 255).to_bytes(1, "little"))
     # print("smooth_scale: ", smooth_scale, ", encoded: ", int(smooth_scale * 255).to_bytes(1, "little"))
     # offset = frame * .05
-    """ # smaller scale → faster x, y offset
-    min_speed = 0.002
-    max_speed = .5
+    # smaller scale → faster x, y offset
+    min_speed = 0.05
+    max_speed = .05
     speed = min_speed + (1 - scale) * (max_speed - min_speed)
 
     # Increment offset linearly, scaled by speed
-    offset += speed
-    #print('%.3f'%speed, '%.3f'%offset) """
+    # offset += speed
+    #print('%.3f'%speed, '%.3f'%offset)
 
     SETTINGS.flutter_probability.current = lerp(SETTINGS.flutter_probability.min, SETTINGS.flutter_probability.max, smooth_scale)
     SETTINGS.flutter_speed_up.current = lerp(SETTINGS.flutter_speed_up.min, SETTINGS.flutter_speed_up.max, smooth_scale)
     SETTINGS.flutter_speed_down.current = lerp(SETTINGS.flutter_speed_down.min, SETTINGS.flutter_speed_down.max, smooth_scale)
     #min_v = lerp(.25, .25, scale)
     
-    color_scale = lerp(.01, .3, smooth_scale)
+    color_scale = lerp(.05, .3, smooth_scale)
     refresh_values()
-    hue_palette = [color - color_scale for color in SETTINGS.hue_palette]
+    #hue_palette = [color - color_scale for color in SETTINGS.hue_palette] # for a .25 shift in hue values per scale
+    hue_palette = SETTINGS.hue_palette # for no shift in overall color palette
 
     for (x, y), i in points:
         # Add time offset for flowing noise3
         # print("getting height with", x, y, offset, scale)
         height = get_height(x + offset, y + offset * 0.3, scale)
-        hue = height_to_hue(height, hue_palette) # Map noise to leds
+        hue = height_to_hue(height, hue_palette) # Map noise to hue
+        
         saturation = lerp(.75, 1, 1 - scale) # normalize and invert value for s
         # LEDS[i] = (i,hsv)
-        led_strip.set_hsv(i, hue, saturation, values[i])
+        led_strip.set_hsv(i, hue % 1.0, saturation, current_values[i])
         # set dots with converted hsv
     
 
@@ -221,44 +232,53 @@ def set_hsv():
     return True
 
 
+def hue(hue):
+    """ normalizes and wraps hue value """
+    return (float(hue) % 360.0) / 360.0
 
 # region boilerplate
 SETTINGS = Config(
     # hue_palette = [.1, .15, .175, .4, .85, .87], # Bell 1 - 1 pane
     # hue_palette =[.3, .32, .34, .36, .38, .4, .58, .62],  # Bell 2 - 8 pane
-     # hue_palette =[.11, .12, .13, .257, .26, .261],  # Shaker 1 - 8 pane
+    # hue_palette =[.11, .12, .13, .257, .26, .261],  # Shaker 1 - 8 pane
     # hue_palette = [.4, .45, .50, .57, .6, .65], # Shaker 2 - 4 pane
-     hue_palette = [.51, .52, .561, .562, .563, .95], # Moog Bass - 6 pane
+    # hue_palette = [.51, .52, .561, .562, .563, .95], # Moog Bass - 6 pane
     # hue_palette = [.2, .23, .24, .26, .6, .65, .78, .9], # Moogy Pad - 4 pane
     # hue_palette = [.1, .3, .35, .4, .65, .9], # Moogy Pad - Horiz 4 pane
     # hue_palette = [.65, .66, .67, .7, .72, .78, .82, .89], # Moogy Pad - Tall 8 pane
+    hue_palette = [hue(35), hue(40), hue(50), hue(285)], # Tester
     scale_multiplier = 0.05, 
     smooth_factor = 0.08, # smaller = smoother, slower response
     flutter_probability = CurrentMinMax(.05, .1, .01),
     flutter_speed_up = CurrentMinMax(.05, .15, .1),
     flutter_speed_down = CurrentMinMax(.2, .09, .02),
-    value = CurrentMinMax(.75, .78, 1.0),
-    distance = CurrentMinMax(90, 90, 450)
+    value = CurrentMinMax(.75, .5, .5),  #TODO: CHANGE THESE BACK
+    distance = CurrentMinMax(90, 10, 75) #TODO: CHANGE THESE BACK
 #    distance = CurrentMinMax(400, 300, 500)
 )
 
 # region LED HANDLING
 NUM_LEDS = 120
-led_strip = plasma.WS2812(NUM_LEDS, color_order=plasma.COLOR_ORDER_RGB)
+led_strip = plasma.WS2812(NUM_LEDS, color_order=plasma.COLOR_ORDER_GRB)
 led_strip.start()
 
 LEDS = [(0, 0, 0)] * NUM_LEDS  # preallocate memory
 #endregion
 
 # region FLUTTER
-values = [SETTINGS.value.min] * NUM_LEDS
+current_values = [SETTINGS.value.min] * NUM_LEDS
 target_values = [SETTINGS.value.min] * NUM_LEDS # the target to lerp towards
+#endregion
+
+# region HUE
+current_hues = [.5] * NUM_LEDS
+target_hues = [.5] * NUM_LEDS # the target to lerp towards
 #endregion
 
 #region OTHER
 frame = 0
 offset = 0
-points = get_points_on_circle((0, 0), 10, NUM_LEDS) # Get evenly spaced points along all curves
+points = get_points_on_line((0, 0), (25, 0), NUM_LEDS) # Get evenly spaced points along all curves
 GRID_SIZE = 16
 noise_grid = [[random.random() for _ in range(GRID_SIZE)] for _ in range(GRID_SIZE)]
 

@@ -267,8 +267,8 @@ def set_hsv():
 # region boilerplate
 SETTINGS = Config(
     # Moogy Pad - Horiz 4 pane  pink & blue -> cyan | green
-    # hue_palette = [hue(120), hue(200), hue(260), hue(350)],
-    # color_shift_factor = .15,
+    hue_palette = [hue(120), hue(200), hue(260), hue(350)],
+    color_shift_factor = .15,
     
     # Moog Bass - 6 pane    green & yellow -> red,
     # hue_palette = [hue(45), hue(65), hue(100)],
@@ -295,8 +295,8 @@ SETTINGS = Config(
    # color_shift_factor = -.25,
     
     # Bell 2 - 8 pane   green & blue & yellow -> cyan | blue | teal
-    hue_palette = [hue(15), hue(150),hue(25), hue(145)], 
-    color_shift_factor = .75,
+    # hue_palette = [hue(15), hue(150),hue(25), hue(145)], 
+    # color_shift_factor = .75,
 
     smooth_factor = 0.15, # smaller = smoother, slower response
     flutter_probability = CurrentMinMax(.05, .1, .01),

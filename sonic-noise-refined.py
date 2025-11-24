@@ -157,6 +157,10 @@ def get_distance():
     # Dad this is the sin function for simulating the distance value
     # return (math.sin(frame/75) + 1) * 5
 
+    # fake_distance =  270 + math.sin(frame * 0.01) * 180
+    # print("Fake distance ", fake_distance)
+    # return fake_distance
+ 
     global last_presence, last_distance_cm, distance_cm, presence, last_distance_ms
 
     if uartSensor.any():
@@ -302,10 +306,9 @@ SETTINGS = Config(
     flutter_probability = CurrentMinMax(.05, .1, .01),
     flutter_speed_up = CurrentMinMax(.05, .15, .1),
     flutter_speed_down = CurrentMinMax(.2, .09, .02),
-    value = CurrentMinMax(.75, .5, 1.0),  #TODO: CHANGE THESE BACK
-    distance = CurrentMinMax(90, 10, 75) #TODO: CHANGE THESE BACK to 90, 450
-#    distance = CurrentMinMax(400, 300, 500)
-)
+    value = CurrentMinMax(.75, .55, 1.0),
+    distance = CurrentMinMax(90, 90, 450)
+
 
 # region LED HANDLING
 NUM_LEDS = 120

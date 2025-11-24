@@ -18,9 +18,9 @@ class Daisy:
         self.patch = patch
 
 class Config:
-    def __init__(self, hue_palette, scale_multiplier, smooth_factor, flutter_probability: CurrentMinMax, flutter_speed_up: CurrentMinMax, flutter_speed_down: CurrentMinMax, value: CurrentMinMax, distance: CurrentMinMax):
+    def __init__(self, hue_palette, color_shift_factor, smooth_factor, flutter_probability: CurrentMinMax, flutter_speed_up: CurrentMinMax, flutter_speed_down: CurrentMinMax, value: CurrentMinMax, distance: CurrentMinMax):
         self.hue_palette = hue_palette
-        self.scale_multiplier = scale_multiplier
+        self.scale_multiplier = color_shift_factor
         self.smooth_factor = smooth_factor
 
         self.flutter_probability = flutter_probability
@@ -74,11 +74,15 @@ def lerp(a, b, t):
     """Linear interpolation between a and b by normalized value t."""
     return a * (1 - t) + b * t
 
-
 def inverse_lerp(a, b, x):
     """ Inverse Interpolation to normalize x by a and b"""
     return (x - a) / (b - a)
 
+def circular_lerp(a, b, t):
+    """ lerps along the shortest wrapped path """
+    diff = (b - a + 0.5) % 1.0 - 0.5  # shortest direction
+    return (a + diff * t) % 1.0
+ 
 
 def nudge(current, target, up_speed, down_speed):
     """ Eases or nudges the current toward the target by factor speed """
@@ -88,6 +92,23 @@ def nudge(current, target, up_speed, down_speed):
         return max(current - down_speed, target)
     return current
 
+def nudge_hue(current, target, up_speed, down_speed):
+    """ Eases or nudges the current toward the target by factor speed """
+    # Smallest signed distance on a circular 0–1 hue wheel
+    diff = (target - current + 0.5) % 1.0 - 0.5
+
+    # Move toward the target like your nudge()
+    if diff > 0:
+        current += min(diff, up_speed)
+    else:
+        current += max(diff, - down_speed)
+
+    return current % 1.0
+
+
+def hue(hue):
+    """ normalizes and wraps hue value """
+    return (float(hue) % 360.0) / 360.0
 
 def height_to_hue(height, hues):
     """
@@ -97,7 +118,8 @@ def height_to_hue(height, hues):
     height = clamp(height)
     i, j, t = get_color_indices(height, len(hues))
     j = min(j, len(hues) - 1)  # ensure j doesnt go out of bounds
-    return lerp(hues[i],  hues[j], t)
+    return circular_lerp(hues[i],  hues[j], t)
+    return hues[j]
 
 
 def get_height(x, y, scale):
@@ -106,8 +128,8 @@ def get_height(x, y, scale):
     x, y: floats, scaled position
     Returns: interpolated noise value 0-1
     """
-    x = x * scale
-    y = y * scale
+    x = x * scale / 1.25
+    y = y * scale / 1.25
     # Wrap around the grid
     gx = int(x) % GRID_SIZE
     gy = int(y) % GRID_SIZE
@@ -195,14 +217,13 @@ def set_hsv():
     smooth_scale = smooth_scale + SETTINGS.smooth_factor * (scale - smooth_scale)
     uartDaisy.write(int(smooth_scale * 255).to_bytes(1, "little"))
     # print("smooth_scale: ", smooth_scale, ", encoded: ", int(smooth_scale * 255).to_bytes(1, "little"))
-    # offset = frame * .05
     # smaller scale → faster x, y offset
-    min_speed = 0.05
-    max_speed = .05
+    min_speed = .1
+    max_speed = .2
     speed = min_speed + (1 - scale) * (max_speed - min_speed)
 
     # Increment offset linearly, scaled by speed
-    # offset += speed
+    offset += speed
     #print('%.3f'%speed, '%.3f'%offset)
 
     SETTINGS.flutter_probability.current = lerp(SETTINGS.flutter_probability.min, SETTINGS.flutter_probability.max, smooth_scale)
@@ -210,50 +231,79 @@ def set_hsv():
     SETTINGS.flutter_speed_down.current = lerp(SETTINGS.flutter_speed_down.min, SETTINGS.flutter_speed_down.max, smooth_scale)
     #min_v = lerp(.25, .25, scale)
     
-    color_scale = lerp(.05, .3, smooth_scale)
+    color_scale = lerp(SETTINGS.scale_multiplier, .01, smooth_scale)
     refresh_values()
-    #hue_palette = [color - color_scale for color in SETTINGS.hue_palette] # for a .25 shift in hue values per scale
-    hue_palette = SETTINGS.hue_palette # for no shift in overall color palette
+    hue_palette = [color - color_scale for color in SETTINGS.hue_palette] # for a .25 shift in hue values per scale
+    # hue_palette = SETTINGS.hue_palette # for no shift in overall color palette
 
     for (x, y), i in points:
         # Add time offset for flowing noise3
         # print("getting height with", x, y, offset, scale)
+        height = get_height(x + offset, y + offset, smooth_scale)
+        target_hues[i] = height_to_hue(height, hue_palette) # Map noise to hue target
+        current_hues[i] = nudge_hue(current_hues[i], target_hues[i], .5, .02) # nudge current toward target
+        current_hues[i] = current_hues[i] % 1.0 # wrap along hsv scale
+        saturation = lerp(.75, 1, 1 - scale) # normalize and invert value for saturation
+        # LEDS[i] = (i,hsv)
+        led_strip.set_hsv(i, current_hues[i], saturation, current_values[i]) 
+        # set dots with converted hsv
+        
+    """ for (x, y), i in points:
+        # Add time offset for flowing noise3
+        # print("getting height with", x, y, offset, scale)
         height = get_height(x + offset, y + offset * 0.3, scale)
         hue = height_to_hue(height, hue_palette) # Map noise to hue
-        
+        # nudge current toward target
         saturation = lerp(.75, 1, 1 - scale) # normalize and invert value for s
         # LEDS[i] = (i,hsv)
         led_strip.set_hsv(i, hue % 1.0, saturation, current_values[i])
-        # set dots with converted hsv
+        # set dots with converted hsv """
     
 
     
     #time.sleep(1)
     return True
 
-
-def hue(hue):
-    """ normalizes and wraps hue value """
-    return (float(hue) % 360.0) / 360.0
-
 # region boilerplate
 SETTINGS = Config(
-    # hue_palette = [.1, .15, .175, .4, .85, .87], # Bell 1 - 1 pane
-    # hue_palette =[.3, .32, .34, .36, .38, .4, .58, .62],  # Bell 2 - 8 pane
-    # hue_palette =[.11, .12, .13, .257, .26, .261],  # Shaker 1 - 8 pane
-    # hue_palette = [.4, .45, .50, .57, .6, .65], # Shaker 2 - 4 pane
-    # hue_palette = [.51, .52, .561, .562, .563, .95], # Moog Bass - 6 pane
-    # hue_palette = [.2, .23, .24, .26, .6, .65, .78, .9], # Moogy Pad - 4 pane
-    # hue_palette = [.1, .3, .35, .4, .65, .9], # Moogy Pad - Horiz 4 pane
-    # hue_palette = [.65, .66, .67, .7, .72, .78, .82, .89], # Moogy Pad - Tall 8 pane
-    hue_palette = [hue(35), hue(40), hue(50), hue(285)], # Tester
-    scale_multiplier = 0.05, 
-    smooth_factor = 0.08, # smaller = smoother, slower response
+    # Moogy Pad - Horiz 4 pane  pink & blue -> cyan | green
+    # hue_palette = [hue(120), hue(200), hue(260), hue(350)],
+    # color_shift_factor = .15,
+    
+    # Moog Bass - 6 pane    green & yellow -> red,
+    # hue_palette = [hue(45), hue(65), hue(100)],
+    # color_shift_factor = .15,
+    
+    # Bell 1 - 1 pane   pink & green -> blue | cyan
+    # hue_palette = [hue(15), hue(25), hue(35), hue(70), hue(85), hue(90)], 
+    # color_shift_factor = -.3,
+    
+    # Shaker 1 - 8 pane     cyan & purple -> deep orange
+    # hue_palette =[hue(165), hue(300)],  
+    # color_shift_factor = .6,
+    
+    # Shaker 2 - 4 pane     green & cyan -> pink | red
+    # hue_palette = [hue(135), hue(170)],
+    # color_shift_factor = -.5,
+    
+    # Moogy Pad - Tall 8 pane   red & yellow & green -> yellow | green
+    # hue_palette = [hue(0), hue(75), hue(150)],
+    # color_shift_factor = .15,
+    
+    # Moogy Pad - 4 pane    purple & cyan -> pale purple | red 
+   # hue_palette =[hue(145), hue(175), hue(270), hue(310)], 
+   # color_shift_factor = -.25,
+    
+    # Bell 2 - 8 pane   green & blue & yellow -> cyan | blue | teal
+    hue_palette = [hue(15), hue(150),hue(25), hue(145)], 
+    color_shift_factor = .75,
+
+    smooth_factor = 0.15, # smaller = smoother, slower response
     flutter_probability = CurrentMinMax(.05, .1, .01),
     flutter_speed_up = CurrentMinMax(.05, .15, .1),
     flutter_speed_down = CurrentMinMax(.2, .09, .02),
-    value = CurrentMinMax(.75, .5, .5),  #TODO: CHANGE THESE BACK
-    distance = CurrentMinMax(90, 10, 75) #TODO: CHANGE THESE BACK
+    value = CurrentMinMax(.75, .5, 1.0),  #TODO: CHANGE THESE BACK
+    distance = CurrentMinMax(90, 10, 75) #TODO: CHANGE THESE BACK to 90, 450
 #    distance = CurrentMinMax(400, 300, 500)
 )
 
@@ -278,7 +328,7 @@ target_hues = [.5] * NUM_LEDS # the target to lerp towards
 #region OTHER
 frame = 0
 offset = 0
-points = get_points_on_line((0, 0), (25, 0), NUM_LEDS) # Get evenly spaced points along all curves
+points = get_points_on_line((0, 0), (25, 18), NUM_LEDS) # Get evenly spaced points along all curves
 GRID_SIZE = 16
 noise_grid = [[random.random() for _ in range(GRID_SIZE)] for _ in range(GRID_SIZE)]
 

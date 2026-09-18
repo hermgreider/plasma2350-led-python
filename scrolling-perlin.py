@@ -12,20 +12,19 @@ Find out more about the Cheerlights API at https://cheerlights.com/
 UPDATE_INTERVAL = 120  # refresh interval in secs. Be nice to free APIs!
 
 # Set how many LEDs you have
-NUM_LEDS = 144
+NUM_LEDS = 288
 
 # Set the brightness
-BRIGHTNESS = 0.2
+BRIGHTNESS = 1.0
 
 # Config
-NUM_LEDS = 144
-BRIGHTNESS = 0.2
 SPEED = 0.5  # higher = faster animation
 SCALE = 0.2   # lower = smoother pattern
 
 # Two colors
 COLOR_A = (252, 186, 3)  
-COLOR_B = (165, 252, 3)  
+# COLOR_B = (165, 252, 3)  
+COLOR_B = (50, 25, 3)  
 
 # Setup
 pico_led = Pin("LED", Pin.OUT)

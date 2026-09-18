@@ -8,7 +8,7 @@ Adjust SNOW_INTENSITY for more snow.
 """
 
 # Set how many LEDs you have
-NUM_LEDS = 144
+NUM_LEDS = 288
 
 # How much snow? [bigger number = more snowflakes]
 SNOW_INTENSITY = 0.0002

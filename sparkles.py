@@ -7,7 +7,7 @@ A festive sparkly effect. Play around with BACKGROUND_COLOUR and SPARKLE_COLOUR 
 """
 frame = 0
 # Set how many LEDs you have
-NUM_LEDS = 144
+NUM_LEDS = 288
 
 # How many sparkles? [bigger number = more sparkles]
 SPARKLE_INTENSITY = 0.005

@@ -216,10 +216,14 @@ def refresh_values():
 def set_hsv():
     """ Set the LEDS """
     global SETTINGS, offset, hue_palette, smooth_scale, last_distance_cm
-    SETTINGS.distance.current = get_distance()
+    # SETTINGS.distance.current = get_distance()
+
+    # if no sensor use the sin function below
+    SETTINGS.distance.current = 20 + (450-90) * (math.sin(2*math.pi*frame/1000) + 1) / 2
+
     scale = clamp(inverse_lerp(SETTINGS.distance.min, SETTINGS.distance.max, SETTINGS.distance.current), 0, 1) # normalized distance
     smooth_scale = smooth_scale + SETTINGS.smooth_factor * (scale - smooth_scale)
-    uartDaisy.write(int(smooth_scale * 255).to_bytes(1, "little"))
+    # uartDaisy.write(int(smooth_scale * 255).to_bytes(1, "little"))
     # print("smooth_scale: ", smooth_scale, ", encoded: ", int(smooth_scale * 255).to_bytes(1, "little"))
     # smaller scale → faster x, y offset
     min_speed = .1
@@ -270,35 +274,35 @@ def set_hsv():
 
 # region boilerplate
 SETTINGS = Config(
-    # Moogy Pad - Horiz 4 pane  pink & blue -> cyan | green
-    hue_palette = [hue(120), hue(200), hue(260), hue(350)],
-    color_shift_factor = .15,
+    # Moogy Pad - Horiz 4 pane  pink & blue -> cyan | green -- DONE
+    # hue_palette = [hue(120), hue(200), hue(260), hue(350)],
+    # color_shift_factor = .15,
     
-    # Moog Bass - 6 pane    green & yellow -> red,
+    # Moog Bass - 6 pane    green & yellow -> red, -- DONE
     # hue_palette = [hue(45), hue(65), hue(100)],
     # color_shift_factor = .15,
     
-    # Bell 1 - 1 pane   pink & green -> blue | cyan
+    # Bell 1 - 1 pane   pink & green -> blue | cyan -- DONE
     # hue_palette = [hue(15), hue(25), hue(35), hue(70), hue(85), hue(90)], 
     # color_shift_factor = -.3,
     
-    # Shaker 1 - 8 pane     cyan & purple -> deep orange
-    # hue_palette =[hue(165), hue(300)],  
-    # color_shift_factor = .6,
+    # Shaker 1 - 8 pane     cyan & purple -> deep orange -- DONE
+    hue_palette =[hue(165), hue(300)],  
+    color_shift_factor = .6,
     
-    # Shaker 2 - 4 pane     green & cyan -> pink | red
+    # Shaker 2 - 4 pane     green & cyan -> pink | red -- DONE
     # hue_palette = [hue(135), hue(170)],
     # color_shift_factor = -.5,
     
-    # Moogy Pad - Tall 8 pane   red & yellow & green -> yellow | green
+    # Moogy Pad - Tall 8 pane   red & yellow & green -> yellow | green -- done
     # hue_palette = [hue(0), hue(75), hue(150)],
     # color_shift_factor = .15,
     
-    # Moogy Pad - 4 pane    purple & cyan -> pale purple | red 
-   # hue_palette =[hue(145), hue(175), hue(270), hue(310)], 
-   # color_shift_factor = -.25,
+    # Moogy Pad - 4 pane    purple & cyan -> pale purple | red -- DONE
+    # hue_palette =[hue(145), hue(175), hue(270), hue(310)], 
+    # color_shift_factor = -.25,
     
-    # Bell 2 - 8 pane   green & blue & yellow -> cyan | blue | teal
+    # Bell 2 - 8 pane   green & blue & yellow -> cyan | blue | teal -- DONE
     # hue_palette = [hue(15), hue(150),hue(25), hue(145)], 
     # color_shift_factor = .75,
 
@@ -307,11 +311,12 @@ SETTINGS = Config(
     flutter_speed_up = CurrentMinMax(.05, .15, .1),
     flutter_speed_down = CurrentMinMax(.2, .09, .02),
     value = CurrentMinMax(.75, .55, 1.0),
-    distance = CurrentMinMax(90, 90, 450)
+    # value = CurrentMinMax(0.35, 0.25, 0.5),
+    distance = CurrentMinMax(90, 90, 450))
 
 
 # region LED HANDLING
-NUM_LEDS = 120
+NUM_LEDS = 288
 led_strip = plasma.WS2812(NUM_LEDS, color_order=plasma.COLOR_ORDER_GRB)
 led_strip.start()
 

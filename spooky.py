@@ -15,7 +15,8 @@ URL = "http://api.thingspeak.com/channels/1417/field/2/last.json"
 UPDATE_INTERVAL = 120  # refresh interval in secs. Be nice to free APIs!
 
 # Set how many LEDs you have
-NUM_LEDS = 90
+# NUM_LEDS = 90
+NUM_LEDS = 288
 
 
 # Set the brightness
@@ -38,6 +39,7 @@ def spooky_rainbows():
     HUE_START = 30  # orange
     HUE_END = 140  # green
     SPEED = 0.3  # bigger = faster (harder, stronger)
+    # SPEED = 0.1
 
     distance = 0.0
     direction = SPEED
@@ -82,13 +84,13 @@ except ValueError as e:
     wifi_failed(e)
 
 while True:
-    # open the json file
-    print(f"Requesting URL: {URL}")
-    r = urequests.get(URL)
-    # open the json data
-    j = r.json()
-    print("Data obtained!")
-    r.close()
+    # # open the json file
+    # print(f"Requesting URL: {URL}")
+    # r = urequests.get(URL)
+    # # open the json data
+    # j = r.json()
+    # print("Data obtained!")
+    # r.close()
 
     # flash the onboard LED after getting data
     pico_led.value(True)
@@ -107,8 +109,8 @@ while True:
     # light up the LEDs
     for i in range(NUM_LEDS):
         led_strip.set_rgb(i, r, g, b)
-    print(f"LEDs set to {hex}")
+    # print(f"LEDs set to {hex}")
 
     # sleep
-    print(f"Sleeping for {UPDATE_INTERVAL} seconds.")
-    time.sleep(UPDATE_INTERVAL)
+    # print(f"Sleeping for {UPDATE_INTERVAL} seconds.")
+    # time.sleep(UPDATE_INTERVAL)

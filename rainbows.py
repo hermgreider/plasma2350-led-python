@@ -7,7 +7,7 @@ Make some rainbows!
 """
 
 # Set how many LEDs you have
-NUM_LEDS = 144
+NUM_LEDS = 288
 
 # The SPEED that the LEDs cycle at (1 - 255)
 SPEED = 20

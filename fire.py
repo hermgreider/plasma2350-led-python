@@ -8,10 +8,10 @@ A fire effect.
 """
 
 # Set how many LEDs you have
-NUM_LEDS = 144
+NUM_LEDS = 288
 
 # WS2812 / NeoPixel™ LEDs
-led_strip = plasma.WS2812(NUM_LEDS, color_order=plasma.COLOR_ORDER_RGB)
+led_strip = plasma.WS2812(NUM_LEDS, color_order=plasma.COLOR_ORDER_GRB)
 
 # Start updating the LED strip
 led_strip.start()

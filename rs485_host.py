@@ -1,91 +1,57 @@
-import plasma 
+import plasma
 import time
 from machine import UART, Pin
-from pimoroni import RGBLED, Button
+from pimoroni import RGBLED
 
+# RS-485 test, host side. Run rs485_node.py on the other board.
+#
+# Every INTERVAL_MSEC the host sends FLASH to NODE_ADDRESS. The node flashes
+# its LED and answers with ACK. The host flashes its onboard LED green when an
+# ACK comes back, red if it times out, and prints a running count.
+#
+# Wiring: RJ45 patch cable (straight-through) from this board's J10 RS485_Out
+# to the node's J4 RS485_In. Pins 4/5 carry B/A, pins 7/8 carry GND.
 
 # Address of this node on RS-485
-MY_ADDRESS = 0 # HOST
-NUM_NODES = 3  # Includes HOST
+MY_ADDRESS = 0  # HOST
+NODE_ADDRESS = 1
 
 # Number of LEDs on this node
 NUM_LEDS = 1
 
-# Set the LED brightness (1.0 max)
-BRIGHTNESS = 0.5
-
 # Illuminated time for LED in msec
 DURATION_MSEC = 200
 INTERVAL_MSEC = 2000
+REPLY_TIMEOUT_MSEC = 100
 
-# UART on Pimoroni Plasma 2350
-# uart = UART(0, baudrate=115200, tx=Pin(0), rx=Pin(1))
+# PortalPCB V2: Plasma SDA/GP20 -> MAX3485 RXD, Plasma SCL/GP21 <- MAX3485 TXD
 uart = UART(1, baudrate=9600, tx=Pin(20), rx=Pin(21))
 
-# Enable pin is A0
-en_pin = Pin(26, Pin.OUT, value=0)
+# PortalPCB V2: MAX3485 EN is on Plasma A2 (GP28). High = transmit, low = receive.
+# (A0/A1 are the I2C link to the Daisy, don't touch them here.)
+en_pin = Pin(28, Pin.OUT, value=0)
 
 class Command:
     FLASH = 0b010
     FADE = 0b100
     SEND_SENSOR = 0b001
     SET_COLOR = 0b011
+    ACK = 0b110
     CLOCK = 0b111
 
-class State:
-    WAITING = 1
-    FLASH = 2
+def make_packet(command, address):
+    return (command << 5) | (address & 0x1f)
 
-class Program:
-    WAITING = 1
-    FLASH = 2
-    FADE = 3
-    STEP = 4
+def send(byte):
+    en_pin.value(1)
+    uart.write(bytes([byte]))
+    uart.flush()
+    # Wait for the stop bit to leave the shift register before releasing the bus
+    while not uart.txdone():
+        pass
+    en_pin.value(0)
 
-class Color:
-    RED = 0x600000
-    BLUE = 0x00007f
-    GREEN = 0x005000
-    ALL = 0
-
-class ProgramColor:
-    program_colors = ( 
-        (Program.FLASH, Color.RED), 
-        (Program.FLASH, Color.BLUE), 
-        (Program.FLASH, Color.GREEN), 
-        (Program.FADE, Color.RED), 
-        (Program.FADE, Color.BLUE), 
-        (Program.STEP, Color.RED), 
-        (Program.STEP, Color.GREEN), 
-        (Program.STEP, Color.ALL) )
-
-    current_program_color = 0
-
-    def currentProgram():
-        return (ProgramColor.program_colors[ProgramColor.current_program_color])[0]
-    
-    def currentColor():
-        return (ProgramColor.program_colors[ProgramColor.current_program_color])[1]
-    
-    def nextProgramColor():
-        ProgramColor.current_program_color = (ProgramColor.current_program_color + 1) % len(ProgramColor.program_colors)
-        return ProgramColor.program_colors[ProgramColor.current_program_color]
-
-class LedHelper:
-    def set_rgb(index):
-        hex_color = ProgramColor.currentColor()
-        r = (hex_color >> 16) & 0xFF
-        g = (hex_color >> 8) & 0xFF
-        b = hex_color & 0xFF
-        led_strip.set_rgb(index, r, g, b)
-
-    def set_off(index):
-        led_strip.set_rgb(index, 0, 0, 0)
-
-# Onboard button on Plasma
-button_a = Button("BUTTON_A")
-
-# set up the Pico W's onboard LED
+# set up the Plasma's onboard LED
 pico_led = RGBLED("LED_R", "LED_G", "LED_B")
 
 # set up the WS2812 / NeoPixel™ LEDs
@@ -93,9 +59,6 @@ led_strip = plasma.WS2812(NUM_LEDS, color_order=plasma.COLOR_ORDER_GRB)
 
 # start updating the LED strip
 led_strip.start()
-
-# Other vars
-program_start = 0
 
 print("Host started...")
 
@@ -106,65 +69,54 @@ for i in range(2):
     pico_led.set_rgb(255, 0, 0)
     time.sleep(0.2)
     pico_led.set_rgb(0, 0, 0)
+    time.sleep(0.2)
 
-# Start first program
-state = State.WAITING
-
-program_start = time.ticks_ms() - 1000
-next_clock = time.ticks_ms() 
+sent = 0
+acked = 0
+next_send = time.ticks_ms()
+led_off_at = None
 
 while True:
 
-    # Response - for now, do nothing. Handle responses later.
-    if uart.any():
-        byte = uart.read(1)
-        print("received")
+    if time.ticks_diff(time.ticks_ms(), next_send) >= 0:
+        next_send = time.ticks_add(next_send, INTERVAL_MSEC)
 
-    # Send clock
-    if time.ticks_diff(time.ticks_ms(), next_clock) >= 0:
-        # Send clock
-        en_pin.value(1)
-        uart.write(b'\xE0')
-        uart.flush()
-        en_pin.value(0)
+        # Drop any stale bytes (e.g. noise from the node powering up)
+        while uart.any():
+            uart.read()
 
-        # print("Sent clock")
+        send(make_packet(Command.FLASH, NODE_ADDRESS))
+        sent += 1
+        sent_at = time.ticks_ms()
 
-        # Schedule the next clock 100ms from now
-        next_clock = time.ticks_add(next_clock, 100)
+        # Turn on my own LED
+        led_strip.set_rgb(0, 0x60, 0, 0)
 
-    if button_a.read() == True:
-        ProgramColor.nextProgramColor()
-        
-        # Send color to Addr 0
-        # packet = bytes(Commands.SET_COLOR)
-        # + bytes(*colors[color_index])
-        # uart.write(packet[0])
-        # uart.write(packet[1])
-        # uart.write(packet[2])
-        # uart.write(packet[3])
+        # Wait for the node's ACK
+        reply = None
+        while time.ticks_diff(time.ticks_ms(), sent_at) < REPLY_TIMEOUT_MSEC:
+            if uart.any():
+                reply = uart.read(1)[0]
+                break
 
-    if ProgramColor.currentProgram() == Program.FLASH:
+        rtt = time.ticks_diff(time.ticks_ms(), sent_at)
+        if reply == make_packet(Command.ACK, NODE_ADDRESS):
+            acked += 1
+            pico_led.set_rgb(0, 255, 0)
+            print("ACK from node", NODE_ADDRESS, "in", rtt, "ms  (", acked, "/", sent, ")")
+        elif reply is None:
+            pico_led.set_rgb(255, 0, 0)
+            print("No reply  (", acked, "/", sent, ")")
+        else:
+            pico_led.set_rgb(255, 0, 255)
+            print("Unexpected byte", hex(reply), " (", acked, "/", sent, ")")
 
-        # Start the next flash program
-        if time.ticks_diff(time.ticks_ms(), program_start + INTERVAL_MSEC) >= 0:
-            
-            # Send flash command to all nodes
-            # print(hex(Command.FLASH << 5))
-            # uart.write(bytes(Command.FLASH << 5))
-            en_pin.value(1)
-            uart.write(b'\x40')
-            uart.flush()
-            en_pin.value(0)
-            
-            # Turn on my own LED
-            LedHelper.set_rgb(0)
+        led_off_at = time.ticks_add(time.ticks_ms(), DURATION_MSEC)
 
-            state = State.FLASH
-            program_start = time.ticks_ms()
+    # Turn off my own LEDs
+    if led_off_at is not None and time.ticks_diff(time.ticks_ms(), led_off_at) >= 0:
+        led_strip.set_rgb(0, 0, 0, 0)
+        pico_led.set_rgb(0, 0, 0)
+        led_off_at = None
 
-        # Turn off my own color
-        if state == State.FLASH and (time.ticks_diff(time.ticks_ms(), program_start + DURATION_MSEC) >= 0):
-            LedHelper.set_off(0)
-            state = State.WAITING
-
+    time.sleep(0.001)

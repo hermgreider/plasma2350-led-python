@@ -5,6 +5,11 @@ every note that sounds and its LEDs can follow each step.
 
 Held notes are kept sorted by pitch and walked in order, one per step. The
 first note held starts right away instead of waiting for the next step.
+
+Unlike the Daisy's, steps land on a shared grid: on_clock_tick() takes the
+clock count since MIDI Start, and a step fires whenever that count is a
+multiple of ticks_per_step. Every node counts from the same Start, so their
+arpeggios step together no matter when each one's notes arrived.
 """
 
 
@@ -19,7 +24,6 @@ class Arpeggiator:
 
         # [note, velocity] pairs, sorted by note
         self.held = []
-        self.tick = 0
         self.step_index = -1
         self.playing_note = None
 
@@ -35,7 +39,6 @@ class Arpeggiator:
         self.held.insert(insert, [note, velocity])
 
         if len(self.held) == 1:
-            self.tick = 0
             self._advance()
 
     def note_off(self, note):
@@ -53,14 +56,16 @@ class Arpeggiator:
         if not self.held:
             self.step_index = -1
 
-    def on_clock_tick(self):
-        if not self.held:
-            return
-
-        self.tick += 1
-        if self.tick >= self.ticks_per_step:
-            self.tick = 0
+    def on_clock_tick(self, count):
+        """count is clock ticks since MIDI Start."""
+        if self.held and count % self.ticks_per_step == 0:
             self._advance()
+
+    def reset(self):
+        """Releases anything sounding and forgets every held note."""
+        self._release_current()
+        self.held = []
+        self.step_index = -1
 
     def _advance(self):
         self._release_current()

@@ -1,6 +1,9 @@
 import gc
 import json
+import os
+import sys
 import time
+import machine
 import plasma
 from pimoroni import RGBLED
 from daisy_link import DaisyLink
@@ -16,8 +19,9 @@ the board says which part it plays:
   {"address": 2, "voices": [0, 2]}
       A node. Listens on the RS-485 bus for frames addressed to it (and
       broadcasts), and plays them: sound on the Daisy, light on the strip.
-      If the bus stays silent for NO_BUS_MSEC after startup, it plays the
-      drone_lead song on its own until the bus wakes up. voices lists the
+      Whenever the bus goes silent for NO_BUS_MSEC (at startup, or because
+      the controller went away mid-song), it lets go of everything and plays
+      the drone_lead song on its own until the bus wakes up. voices lists the
       MIDI channels this node plays; the strip is split evenly among them
       (default: all three, see node.py).
 
@@ -29,8 +33,20 @@ the board says which part it plays:
       queued for the other nodes have left (see LOCAL_EXTRA_DELAY_US), so
       it doesn't play ahead of them.
 
-Onboard LED: red while waiting for the Daisy, green once it answers,
-magenta if it answers with a different protocol version.
+Onboard LED (see Status):
+  red      waiting for the Daisy
+  green    playing: following the bus, or the controller playing its song
+  blue     playing its own demo, because the bus is silent
+  magenta  the Daisy speaks a different protocol version (playing anyway)
+  3 quick red flashes at startup: the last run crashed or hung, and the
+           board reset itself -- details in crash.log on the board
+
+Crashes and hangs: any unexpected exception is written to crash.log and
+the board resets. A timer also checks the main loop is still going, and
+resets the board if it's been stuck for HANG_MSEC. It's a software timer
+rather than the RP2350's hardware watchdog because that one can't be
+stopped once started: interrupting the board with mpremote to copy files
+would get it reset mid-copy. Interrupting stops this one cleanly.
 
 Every STATS_INTERVAL_MSEC it prints, avg/max in ms over the interval:
   late   (controller) a song event or clock tick went out after it was due
@@ -45,9 +61,18 @@ Copy to the board with:
 """
 
 CONFIG_FILE = "node.json"
+CRASH_LOG = "crash.log"
+CRASH_FLAG = "crashed"
+
+# Keep crash.log from filling the flash
+CRASH_LOG_MAX_BYTES = 8192
+
+# Reset the board if the main loop hasn't come round in this long
+HANG_MSEC = 5000
 DEFAULT_CONFIG = {"address": 1, "controller": False, "song": "drone_lead", "voices": [1, 0, 2]}
 
-# A node with no bus traffic this long after startup plays its own demo
+# A node with no bus traffic this long plays its own demo. The controller
+# sends clock 24 times a beat, so a few seconds of silence means it's gone.
 NO_BUS_MSEC = 4000
 FALLBACK_SONG = "drone_lead"
 
@@ -89,6 +114,83 @@ class Timing:
         return "{} {:.1f}/{:.1f}".format(name, avg, self.max / 1000)
 
 
+class Status:
+    """The onboard RGB LED, showing what the portal is doing."""
+
+    WAITING = (255, 0, 0)
+    PLAYING = (0, 255, 0)
+    DEMO = (0, 0, 255)
+    MISMATCH = (255, 0, 255)
+
+    def __init__(self):
+        self.led = RGBLED("LED_R", "LED_G", "LED_B")
+        self.mismatch = False
+
+    def show(self, color):
+        # A protocol mismatch outranks everything but waiting for the Daisy
+        if self.mismatch and color != Status.WAITING:
+            color = Status.MISMATCH
+        self.led.set_rgb(*color)
+
+    def flash_crashed(self):
+        for _ in range(3):
+            self.led.set_rgb(255, 0, 0)
+            time.sleep_ms(150)
+            self.led.set_rgb(0, 0, 0)
+            time.sleep_ms(150)
+
+
+class Watchdog:
+    """Resets the board if feed() hasn't been called for HANG_MSEC. Checked
+    from a timer, so it fires even if the main loop is stuck in Python."""
+
+    def __init__(self):
+        self.last_fed = time.ticks_ms()
+        self.timer = machine.Timer(period=1000, callback=self._check)
+
+    def feed(self):
+        self.last_fed = time.ticks_ms()
+
+    def stop(self):
+        self.timer.deinit()
+
+    def _check(self, _timer):
+        if time.ticks_diff(time.ticks_ms(), self.last_fed) > HANG_MSEC:
+            self.timer.deinit()
+            record_crash("Main loop stuck for over {}ms".format(HANG_MSEC))
+            machine.reset()
+
+
+def record_crash(reason):
+    """Appends reason (a message or an exception) to crash.log and leaves a
+    flag for the next startup to show."""
+    try:
+        try:
+            if os.stat(CRASH_LOG)[6] > CRASH_LOG_MAX_BYTES:
+                os.remove(CRASH_LOG)
+        except OSError:
+            pass
+        with open(CRASH_LOG, "a") as f:
+            f.write("---- uptime {}s\n".format(time.ticks_ms() // 1000))
+            if isinstance(reason, BaseException):
+                sys.print_exception(reason, f)
+            else:
+                f.write(reason + "\n")
+        with open(CRASH_FLAG, "w") as f:
+            f.write("1")
+    except OSError:
+        # Never let logging the crash stop the reset
+        pass
+
+
+def crashed_last_time():
+    try:
+        os.remove(CRASH_FLAG)
+        return True
+    except OSError:
+        return False
+
+
 def load_config():
     config = dict(DEFAULT_CONFIG)
     try:
@@ -99,28 +201,29 @@ def load_config():
     return config
 
 
-def connect_daisy(link, led):
+def connect_daisy(link, status, watchdog):
     print("Connecting to the Daisy...")
+    status.show(Status.WAITING)
     while True:
+        watchdog.feed()
         result = link.connect()
         if result is True:
-            led.set_rgb(0, 255, 0)
             print("Connected")
             return
         if result is False:
-            led.set_rgb(255, 0, 255)
+            status.mismatch = True
             print("Daisy speaks a different protocol version -- playing anyway")
             return
-        led.set_rgb(255, 0, 0)
         time.sleep_ms(500)
 
 
 class Loop:
     """What every main loop shares: timing stats and quiet-time GC."""
 
-    def __init__(self, node, link):
+    def __init__(self, node, link, watchdog):
         self.node = node
         self.link = link
+        self.watchdog = watchdog
         self.light = Timing()
         self.gap = Timing()
         self.gc = Timing()
@@ -131,6 +234,7 @@ class Loop:
         self.next_stats = time.ticks_add(now, STATS_INTERVAL_MSEC)
 
     def start_pass(self):
+        self.watchdog.feed()
         pass_start = time.ticks_us()
         self.gap.add(time.ticks_diff(pass_start, self.last_pass))
         self.last_pass = pass_start
@@ -161,7 +265,7 @@ class Loop:
             self.last_pass = time.ticks_us()
 
 
-def run_controller(config, node, link):
+def run_controller(config, node, link, status, watchdog):
     address = config["address"]
     song, tempo = SONGS[config["song"]]
 
@@ -190,8 +294,9 @@ def run_controller(config, node, link):
             local_queue.append([time.ticks_add(due, LOCAL_EXTRA_DELAY_US), payload])
 
     player = Player(song, tempo, emit)
-    loop = Loop(node, link)
+    loop = Loop(node, link, watchdog)
     print("Controller: song", config["song"])
+    status.show(Status.PLAYING)
 
     def stats():
         avg, worst = player.take_late()
@@ -208,25 +313,29 @@ def run_controller(config, node, link):
         loop.end_pass(pass_start, active, stats)
 
 
-def run_node(config, node, link):
+def run_node(config, node, link, status, watchdog):
     bus = rs485_bus.BusReceiver(config["address"])
     bus.drain()
 
     # The fallback demo, while the bus is silent: [Player or None]
     fallback = [None]
-    heard_bus = [False]
-    started = time.ticks_ms()
+
+    # When a frame (for anyone) last arrived; startup counts as one
+    last_heard = [time.ticks_ms()]
+    heard_any = [False]
 
     def on_frame(frame_type, payload):
         if fallback[0] is not None:
             print("Bus is live - stopping the demo")
             fallback[0] = None
             node.all_off()
+            status.show(Status.PLAYING)
         if frame_type == rs485_bus.TYPE_MIDI:
             node.handle(payload)
 
-    loop = Loop(node, link)
+    loop = Loop(node, link, watchdog)
     print("Node", config["address"], "listening")
+    status.show(Status.PLAYING)
 
     def stats():
         return "frames {} crc errors {}".format(bus.frames, bus.crc_errors)
@@ -234,14 +343,18 @@ def run_node(config, node, link):
     while True:
         pass_start = loop.start_pass()
         active = bus.poll(on_frame)
+        now = time.ticks_ms()
         if active:
-            heard_bus[0] = True
+            last_heard[0] = now
+            heard_any[0] = True
 
-        if (not heard_bus[0] and fallback[0] is None
-                and time.ticks_diff(time.ticks_ms(), started) >= NO_BUS_MSEC):
-            print("No bus traffic - playing", FALLBACK_SONG)
+        if fallback[0] is None and time.ticks_diff(now, last_heard[0]) >= NO_BUS_MSEC:
+            print("Bus lost" if heard_any[0] else "No bus traffic", "- playing", FALLBACK_SONG)
+            # Let go of anything the controller left sounding
+            node.all_off()
             song, tempo = SONGS[FALLBACK_SONG]
             fallback[0] = Player(song, tempo, lambda address, payload: node.handle(payload))
+            status.show(Status.DEMO)
 
         if fallback[0] is not None and fallback[0].tick():
             active = True
@@ -249,23 +362,42 @@ def run_node(config, node, link):
         loop.end_pass(pass_start, active, stats)
 
 
-config = load_config()
-print("Config:", config)
+def main(status, watchdog):
+    config = load_config()
+    print("Config:", config)
 
-led = RGBLED("LED_R", "LED_G", "LED_B")
-link = DaisyLink()
+    link = DaisyLink()
 
-# No start(): the node pushes the strip out by hand, right after each change
-strip = plasma.WS2812(NUM_LEDS, color_order=plasma.COLOR_ORDER_GRB)
-strip.clear()
-strip.update()
+    # No start(): the node pushes the strip out by hand, right after each change
+    strip = plasma.WS2812(NUM_LEDS, color_order=plasma.COLOR_ORDER_GRB)
+    strip.clear()
+    strip.update()
 
-node = Node(link, strip, config["voices"])
+    node = Node(link, strip, config["voices"])
 
-connect_daisy(link, led)
-time.sleep_ms(AFTER_CONNECT_MSEC)
+    connect_daisy(link, status, watchdog)
+    time.sleep_ms(AFTER_CONNECT_MSEC)
 
-if config.get("controller"):
-    run_controller(config, node, link)
-else:
-    run_node(config, node, link)
+    if config.get("controller"):
+        run_controller(config, node, link, status, watchdog)
+    else:
+        run_node(config, node, link, status, watchdog)
+
+
+status = Status()
+if crashed_last_time():
+    print("Restarted after a crash or hang - see", CRASH_LOG)
+    status.flash_crashed()
+
+watchdog = Watchdog()
+try:
+    main(status, watchdog)
+except KeyboardInterrupt:
+    # mpremote (or Ctrl-C) taking over: stop cleanly, don't reset
+    watchdog.stop()
+    raise
+except Exception as e:
+    watchdog.stop()
+    sys.print_exception(e)
+    record_crash(e)
+    machine.reset()
